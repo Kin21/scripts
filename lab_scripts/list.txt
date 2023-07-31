@@ -1,0 +1,17 @@
+		#!/bin/bash
+
+users_and_group=("SysAdmins:GodMode" "CEO:Boss" "Admins:Alice:Gabi" "Managers:Anthony:Elisa:Jolie:Tom" "Unknown:Supreme");
+for i in ${users_and_group[@]}
+	do
+		# Splits group from users
+		# Prints group and users that belong to it
+		# Creates users and assigned group to them
+		group=$(echo $i | cut -d ":" -f 1);
+		users=$(echo $i | cut -d ":" -f 2- --output-delimiter=" ")
+		echo $(addgroup --force-badname $group);
+		for u in $users
+			do
+				echo $(adduser --force-badname --disabled-login --gecos ,,,,,,, --ingroup $group $u)
+			done
+	done
+

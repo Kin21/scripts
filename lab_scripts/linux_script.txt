@@ -1,0 +1,126 @@
+#!/bin/bash
+
+
+allow_read_from_top_groups(){
+	local user_dir=$1
+	local groups=$2
+	for grp in $groups
+	do 
+		setfacl -m g:$grp:rx,d:g:$grp:rx $user_dir
+	done
+}
+
+
+users_and_group=("SysAdmins:GodMode" "CEO:Boss" "Admins:Alice:Gabi" "Managers:Anthony:Elisa:Jolie:Tom" "Unknown:Supreme");
+top_groups=""
+all_users=""
+
+
+for i in ${users_and_group[@]}
+	do
+		# Splits group from users that belongs to it
+		group=$(echo $i | cut -d ":" -f 1);
+		users=$(echo $i | cut -d ":" -f 2- --output-delimiter=" ")
+		# Creates group 
+		echo $(addgroup --force-badname $group);
+		top_groups=$top_groups" $group"
+		echo $top_groups
+		for u in $users
+			do
+				# Creates user and assign group
+				echo $(adduser --force-badname --disabled-login --gecos ,,,,,,, --ingroup $group $u)
+				# Users from a higher-level group can read objects from lower level groups
+				allow_read_from_top_groups "/home/"$u "$top_groups"
+				all_users=$all_users" "$u
+			done
+	done
+
+
+# Each user has full permissions to the objects he creates, and for other objects from the
+# same group the user belongs – read-only permissions.
+echo $(setfacl -dm u::rwx,g::rX,o::--- /home/*)
+echo $(setfacl -m u::rwx,g::rX,o::--- /home/*)
+
+
+# The CEO has full permissions
+setfacl -m g:CEO:rwx,d:g:CEO:rwx /home/*
+
+
+# There is a general directory where everyone has full permissions
+shared_dir="/home/share"
+mkdir $shared_dir
+for grp in $top_groups
+	do 
+		setfacl -m g:$grp:rwx,d:g:$grp:rwx $shared_dir
+	done
+# Change ownership of shared directory to GodMode	
+chown GodMode:SysAdmins $shared_dir
+
+
+# There is a special directory, which is accessible only to specified users. 
+special_dir="/home/TestProject"
+mkdir $special_dir
+setfacl -m u::rwx,g::rx,o::--- $special_dir
+setfacl -dm u::rwx-,g::rx,o::--- $special_dir
+setfacl -m u:Alice:rwx,d:u:Alice:rwx $special_dir
+setfacl -m u:Tom:rwx,d:u:Tom:rwx $special_dir
+chown Boss:CEO $special_dir
+chmod g+s $special_dir
+
+
+# For the Unknown, choose a complex permission scheme of your choice
+reports_dir="/home/external_reports"
+mkdir $reports_dir
+chown Boss:CEO $reports_dir
+chmod 660 $reports_dir
+chmod g+s $reports_dir
+bug_reports=$reports_dir"/bugs.txt"
+comments_file=$reports_dir"/comments.txt"
+touch $bug_reports
+touch $comments_file
+setfacl -m g:Unknown:rx $reports_dir 
+setfacl -m g:Unknown:rw $bug_reports $comments_file
+chattr +a $bug_reports
+chattr +a $comments_file
+
+
+# Select directory, which belongs to the CEO, and grant write permission to accountant
+setfacl -m u:Alice:wx,d:u:Alice:w /home/Boss
+
+
+# Set password policy according to current situation and modern requirements in IT world
+# Backup 
+#cp /etc/pam.d/common-password /etc/pam.d/common-password.bak
+
+pam_file="/etc/pam.d/common-password"
+new_pam="/etc/pam.d/common-password.new"
+
+# Password minimal length - 10, remeber last 50 used passwords
+sed 's/^password.*pam_unix.so.*$/password	[success=2 default=ignore]	pam_unix.so obscure sha512 remember=50 minlen=10/' $pam_file > $new_pam
+
+# Password quality - sets minum number of lowercase, uppercase, and other characters to 2,2,2 acconderly
+sed 's/^password.*pam_pwquality.so.*$/password	requisite			pam_pwquality.so ucredit=-2 dcredit=-2 ocredit=-2/' $new_pam > $pam_file
+
+# Password is valid for 60 days and cannot be renewed 15 days
+for u in $all_users
+do
+	chage -m 15 -M 60 $u
+done
+
+# Prohibit employees from ?
+for u in $all_users
+do
+	chown root:root /home/$u/.*
+	setfacl -m u:$u:--- /usr/bin/gnome-terminal.real
+	setfacl -m u:$u:--- /usr/bin/gnome-terminal
+done
+
+
+
+# Prints resulting ACLs for /home directory
+for i in $(ls /home)
+do
+	getfacl "/home/"$i
+done
+
+

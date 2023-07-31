@@ -1,0 +1,14 @@
+$users_and_groups = @(
+    @("SysAdmins", "GodMode"),
+    @("CEO", "Boss"),
+    @("Administration", "Alice", "Gabi"),
+    @("Managers","Anthony", "Elisa", "Jolie", "Tom")
+    @("Unknown", "Supreme")
+)
+echo $users_and_groups[0]
+# foreach ($element in $users_and_groups){
+#     $group = $element[0]
+#     $users = $element[1..($element.length)]
+#     echo $group
+#     echo $users
+# }

@@ -1,0 +1,73 @@
+#!/bin/bash
+
+
+allow_read_from_top_groups(){
+	local user_dir=$1
+	local groups=$2
+	for grp in $groups
+	do 
+		setfacl -m g:$grp:rx,d:g:$grp:rx $user_dir
+	done
+}
+
+
+users_and_group=("SysAdmins:GodMode" "CEO:Boss" "Admins:Alice:Gabi" "Managers:Anthony:Elisa:Jolie:Tom" "Unknown:Supreme");
+top_groups=""
+
+
+for i in ${users_and_group[@]}
+	do
+		# Splits group from users that belongs to it
+		group=$(echo $i | cut -d ":" -f 1);
+		users=$(echo $i | cut -d ":" -f 2- --output-delimiter=" ")
+		# Creates group 
+		echo $(addgroup --force-badname $group);
+		top_groups=$top_groups" $group"
+		echo $top_groups
+		for u in $users
+			do
+				# Creates user and assign group
+				echo $(adduser --force-badname --disabled-login --gecos ,,,,,,, --ingroup $group $u)
+				# Users from a higher-level group can read objects from lower level groups
+				allow_read_from_top_groups "/home/"$u "$top_groups"
+			done
+	done
+
+
+# Each user has full permissions to the objects he creates, and for other objects from the
+# same group the user belongs – read-only permissions.
+echo $(setfacl -dm u::rwx,g::rX,o::--- /home/*)
+echo $(setfacl -m u::rwx,g::rX,o::--- /home/*)
+
+
+# There is a general directory where everyone has full permissions
+shared_dir="/home/share"
+mkdir $shared_dir
+for grp in $top_groups
+	do 
+		setfacl -m g:$grp:rwx,d:g:$grp:rwx $shared_dir
+	done
+# Change ownership of shared directory to GodMode	
+chown GodMode:SysAdmins $shared_dir
+
+
+# There is a special directory, which is accessible only to specified users. 
+special_dir="/home/TestProject"
+mkdir $special_dir
+setfacl -m u::rwx,g::rx,o::--- $special_dir
+setfacl -dm u::rwx-,g::rx,o::--- $special_dir
+setfacl -m u:Alice:rwx,d:u:Alice:rwx $special_dir
+setfacl -m u:Tom:rwx,d:u:Tom:rwx $special_dir
+chown Boss:CEO $special_dir
+chmod g+s $special_dir
+
+
+
+
+
+# Prints resulting ACLs for /home directory
+for i in $(ls /home)
+do
+	getfacl "/home/"$i
+done
+
